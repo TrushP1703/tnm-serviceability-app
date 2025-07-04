@@ -1,56 +1,90 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="Serviceability Checker", layout="centered")
-st.title("📦 TNM Serviceability Lookup Tool")
-
-# Link to your published Google Sheet CSV
+# Load data from Google Sheet (public link)
 sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTC7eGFDO4cthDWrY91NA5O97zFMeNREoy_wE5qDqCY6BcI__tBjsLJuZxAvaUyV48ZMZRJSQP1W-5G/pub?gid=0&single=true&output=csv"
-df = pd.read_csv(sheet_url)
+df = pd.read_csv(sheet_url, dtype={'Pincode': str})
 
-# Clean and normalize column names
-df.columns = df.columns.str.strip().str.replace(" ", "_").str.replace("(", "").str.replace(")", "").str.replace(".", "")
+# Rename columns for consistency (optional)
+df.columns = df.columns.str.strip()
 
-# Convert Pincode column to string for safe matching
-df["Pincode"] = df["Pincode"].astype(str).str.strip()
+# Map user-friendly service keys to actual sheet column names
+service_map = {
+    "4W_Tyre": "4W Tyre Order",
+    "4W_Battery": "4W Battery Order",
+    "2W_Tyre": "2W Tyre Order",
+    "2W_Battery": "2W Battery Order"
+}
 
-# UI Inputs
-st.subheader("Check Serviceability")
+vendor_fitment_map = {
+    "4W_Tyre": "4W Tyre (vendor fitment)",
+    "4W_Battery": "Battery (vendor fitment)",
+    "2W_Tyre": "",
+    "2W_Battery": ""
+}
+
+fitment_fee_map = {
+    "4W_Tyre": "Extra fitment fees 4W Tyre if applicable in Rs.",
+    "4W_Battery": "Extra fitment fees 4W Battery if applicable in Rs.",
+    "2W_Tyre": "Extra fitment fees 2W Tyre if applicable in Rs.",
+    "2W_Battery": "Extra fitment fees 2W Battery if applicable in Rs."
+}
+
+# Streamlit UI
+st.set_page_config(page_title="TNM Serviceability Lookup Tool", page_icon="📦")
+st.title("📦 TNM Serviceability Lookup Tool")
+st.header("Check Serviceability")
+
 agent_type = st.selectbox("Select Agent Type", ["Online", "Inbound", "Outbound"])
-service_type = st.selectbox("Select Service Type", ["4W_Tyre", "2W_Tyre", "4W_Battery", "2W_Battery"])
+service_type = st.selectbox("Select Service Type", list(service_map.keys()))
 pincode = st.text_input("Enter Pincode")
 
-# Lookup Logic
 if pincode:
-    try:
-        pincode = pincode.strip()
-        result = df[df["Pincode"] == pincode]
+    if not pincode.strip().isdigit():
+        st.error("❌ Invalid pincode. Please enter a numeric value.")
+    else:
+        df["Pincode"] = df["Pincode"].astype(str).str.strip()
+        result = df[df["Pincode"] == pincode.strip()]
 
-        if not result.empty:
+        if result.empty:
+            st.error("❌ No data found for this pincode.")
+        else:
             row = result.iloc[0]
-            is_serviceable = row[service_type] == "Yes"
-            vendor_key = "Vendor_Fitment_4W_Tyre" if "Tyre" in service_type else "Vendor_Fitment_4W_Battery"
-            fee_key = f"Extra_Fee_{service_type}"
+            service_status = row[service_map[service_type]].strip().lower()
 
             # Special logic for Online agents
-            if (agent_type == "Online" and row["4W_Tyre"] == "Yes" and
-                row["4W_Battery"] == "No" and row["2W_Tyre"] == "No" and row["2W_Battery"] == "No"):
-                is_serviceable = False
-                special_remark = "⚠️ Only 4W Tyre available — check with CM before confirming."
+            if agent_type == "Online":
+                all_services = {
+                    k: row[v].strip().lower() for k, v in service_map.items()
+                }
+                only_4w_tyre = (
+                    all_services["4W_Tyre"] == "yes" and
+                    all_services["4W_Battery"] == "no" and
+                    all_services["2W_Tyre"] == "no" and
+                    all_services["2W_Battery"] == "no"
+                )
+                if only_4w_tyre:
+                    st.error("❌ Not Serviceable\n\n🟡 Only 4W Tyre available — check with CM before confirming.")
+                    st.info(f"📍 Remark: {row['Remark']}")
+                elif service_status == "yes":
+                    st.success("✅ Serviceable")
+                else:
+                    st.error("❌ Not Serviceable")
+                    st.info(f"📍 Nearest Service Distance: {row['If No in serviceable area in TNM mention Distance']}")
+                    st.info(f"📝 Remark: {row['Remark']}")
             else:
-                special_remark = row["Remark"]
+                if service_status == "yes":
+                    st.success("✅ Serviceable")
+                else:
+                    st.error("❌ Not Serviceable")
+                    st.info(f"📍 Nearest Service Distance: {row['If No in serviceable area in TNM mention Distance']}")
+                    st.info(f"📝 Remark: {row['Remark']}")
 
-            st.markdown(f"### ✅ Serviceable: {'Yes' if is_serviceable else 'No'}")
+            # Show vendor fitment if applicable
+            vendor_column = vendor_fitment_map[service_type]
+            if vendor_column:
+                st.info(f"🚚 Vendor Fitment Available: {row[vendor_column]}")
 
-            if not is_serviceable:
-                st.markdown(f"📍 Nearest TNM Area Distance: {row['Distance_If_Not_Serviceable']}")
-
-            if "4W" in service_type:
-                st.markdown(f"🚚 Vendor Fitment: {row[vendor_key]}")
-
-            st.markdown(f"💰 Extra Fee: ₹{row[fee_key]}")
-            st.markdown(f"📝 Remark: {special_remark}")
-        else:
-            st.warning("❗ Pincode not found in the dataset.")
-    except Exception as e:
-        st.error(f"Something went wrong. Error: {str(e)}")
+            # Show extra fitment fee
+            fee_column = fitment_fee_map[service_type]
+            st.info(f"💰 Extra Fitment Fee: ₹{row[fee_column]}")
