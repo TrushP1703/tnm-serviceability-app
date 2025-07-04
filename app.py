@@ -4,11 +4,10 @@ import pandas as pd
 st.set_page_config(page_title="Serviceability Checker", layout="centered")
 st.title("📦 TNM Serviceability Lookup Tool")
 
-# Paste your public CSV link here (from published Google Sheet)
-sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTC7eGFDO4cthDWrY91NA5O97zFMeNREoy_wE5qDqCY6BcI__tBjsLJuZxAvaUyV48ZMZRJSQP1W-5G/pub?gid=0&single=true&output=csv"
+# Link to your published Google Sheet CSV
+sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT3sDnqQqjP7gnz9JPUBgBGv1C3hGAFcVHyW13pWiStzlls2hVdyMV2YvwKBIWcFv6RLNyl5hBZORCA/pub?output=csv"
 df = pd.read_csv(sheet_url)
 
-# Clean columns
 df.columns = df.columns.str.strip().str.replace(" ", "_").str.replace("(", "").str.replace(")", "").str.replace(".", "")
 
 # Input Form
