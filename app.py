@@ -8,17 +8,24 @@ st.title("📦 TNM Serviceability Lookup Tool")
 sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTC7eGFDO4cthDWrY91NA5O97zFMeNREoy_wE5qDqCY6BcI__tBjsLJuZxAvaUyV48ZMZRJSQP1W-5G/pub?gid=0&single=true&output=csv"
 df = pd.read_csv(sheet_url)
 
+# Clean and normalize column names
 df.columns = df.columns.str.strip().str.replace(" ", "_").str.replace("(", "").str.replace(")", "").str.replace(".", "")
 
-# Input Form
+# Convert Pincode column to string for safe matching
+df["Pincode"] = df["Pincode"].astype(str).str.strip()
+
+# UI Inputs
 st.subheader("Check Serviceability")
 agent_type = st.selectbox("Select Agent Type", ["Online", "Inbound", "Outbound"])
 service_type = st.selectbox("Select Service Type", ["4W_Tyre", "2W_Tyre", "4W_Battery", "2W_Battery"])
 pincode = st.text_input("Enter Pincode")
 
+# Lookup Logic
 if pincode:
     try:
-        result = df[df["Pincode"] == int(pincode)]
+        pincode = pincode.strip()
+        result = df[df["Pincode"] == pincode]
+
         if not result.empty:
             row = result.iloc[0]
             is_serviceable = row[service_type] == "Yes"
@@ -44,6 +51,6 @@ if pincode:
             st.markdown(f"💰 Extra Fee: ₹{row[fee_key]}")
             st.markdown(f"📝 Remark: {special_remark}")
         else:
-            st.warning("❗ Pincode not found.")
-    except:
-        st.error("Invalid pincode. Please enter a numeric value.")
+            st.warning("❗ Pincode not found in the dataset.")
+    except Exception as e:
+        st.error(f"Something went wrong. Error: {str(e)}")
